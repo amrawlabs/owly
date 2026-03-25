@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 
-from owly import LLM
-from owly.core import BaseProvider, ProviderChunk, ProviderRequest
-from owly.core.exceptions import CancellationError
-from owly.core.types import LLMRequest, Message
+from owly_ai import LLM
+from owly_ai.core import BaseProvider, ProviderChunk, ProviderRequest
+from owly_ai.core.exceptions import CancellationError
+from owly_ai.core.types import LLMRequest, Message
 
 
 class SlowProvider(BaseProvider):

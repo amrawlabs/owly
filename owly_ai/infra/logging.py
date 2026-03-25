@@ -1,11 +1,11 @@
-"""Logging utilities for Owly runtime."""
+"""Logging utilities for owly-ai runtime."""
 
 from __future__ import annotations
 
 import logging
 
 
-def get_logger(name: str = "owly") -> logging.Logger:
+def get_logger(name: str = "owly-ai") -> logging.Logger:
     """Return a configured logger without global side effects."""
 
     logger = logging.getLogger(name)

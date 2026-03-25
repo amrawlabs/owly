@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 
-from owly import LLM
-from owly.core.types import LLMRequest, Message
+from owly_ai import LLM
+from owly_ai.core.types import LLMRequest, Message
 
 
 async def main() -> None:

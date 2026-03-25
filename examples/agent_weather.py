@@ -2,9 +2,9 @@ import asyncio
 import os
 import sys
 
-from owly import LLM
-from owly.agent import Agent
-from owly.tools import Tool
+from owly_ai import LLM
+from owly_ai.agent import Agent
+from owly_ai.tools import Tool
 
 
 def get_weather(location: str) -> str:

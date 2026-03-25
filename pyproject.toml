@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "owly"
+name = "owly-ai"
 version = "0.1.0"
 description = "Streaming-first LLM runtime for real-time systems"
 readme = "README.md"
@@ -31,4 +31,4 @@ Repository = "https://github.com/amrawlabs/owly"
 Issues = "https://github.com/amrawlabs/owly/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["owly"]
+packages = ["owly_ai"]

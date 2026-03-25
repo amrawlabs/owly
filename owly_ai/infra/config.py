@@ -1,4 +1,4 @@
-"""Runtime configuration for Owly."""
+"""Runtime configuration for owly-ai."""
 
 from __future__ import annotations
 
@@ -19,4 +19,4 @@ class OwlyConfig:
     """Top-level runtime configuration."""
 
     stream: StreamConfig = StreamConfig()
-    logger_name: str = "owly"
+    logger_name: str = "owly-ai"

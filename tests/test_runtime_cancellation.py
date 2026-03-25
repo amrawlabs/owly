@@ -5,8 +5,8 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from owly.core.exceptions import CancellationError
-from owly.runtime.cancellation import cancellable_stream
+from owly_ai.core.exceptions import CancellationError
+from owly_ai.runtime.cancellation import cancellable_stream
 
 
 async def _slow_stream() -> AsyncIterator[str]:

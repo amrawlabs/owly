@@ -4,9 +4,9 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from owly.core.types import ProviderChunk
-from owly.infra.config import StreamConfig
-from owly.runtime.normalizer import normalize_stream
+from owly_ai.core.types import ProviderChunk
+from owly_ai.infra.config import StreamConfig
+from owly_ai.runtime.normalizer import normalize_stream
 
 
 async def _provider_stream(chunks: list[ProviderChunk]) -> AsyncIterator[ProviderChunk]:

@@ -1,12 +1,12 @@
-# Owly 🦉
+# owly-ai 🦉
 
 > A lightweight, streaming-first LLM agent framework for Python.
 
-[![PyPI version](https://img.shields.io/pypi/v/owly.svg)](https://pypi.org/project/owly/)
-[![Python](https://img.shields.io/pypi/pyversions/owly.svg)](https://pypi.org/project/owly/)
+[![PyPI version](https://img.shields.io/pypi/v/owly-ai.svg)](https://pypi.org/project/owly-ai/)
+[![Python](https://img.shields.io/pypi/pyversions/owly-ai.svg)](https://pypi.org/project/owly-ai/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-Owly is a minimal Python framework for building real-time, streaming-first LLM applications. It provides an agent orchestration loop, provider-agnostic tool calling, session memory, and both async streaming and synchronous interfaces — all without pulling in heavy dependencies.
+owly-ai is a minimal Python framework for building real-time, streaming-first LLM applications. It provides an agent orchestration loop, provider-agnostic tool calling, session memory, and both async streaming and synchronous interfaces — all without pulling in heavy dependencies.
 
 ---
 
@@ -26,7 +26,19 @@ Owly is a minimal Python framework for building real-time, streaming-first LLM a
 ## 📦 Installation
 
 ```bash
-pip install owly
+pip install owly-ai
+```
+
+For other projects, always reference the published package as `owly-ai`:
+
+```toml
+# pyproject.toml
+dependencies = ["owly-ai"]
+```
+
+```txt
+# requirements.txt
+owly-ai
 ```
 
 ```bash
@@ -42,7 +54,7 @@ pip install -e .
 
 **Requirements**: Python ≥ 3.11
 
-Owly ships with adapters for OpenAI and Gemini. Install the providers you need:
+owly-ai ships with adapters for OpenAI and Gemini. Install the providers you need:
 
 ```bash
 pip install openai               # for OpenAI
@@ -76,8 +88,8 @@ Stream tokens directly from any provider:
 
 ```python
 import asyncio
-from owly import LLM
-from owly.core.types import LLMRequest, Message
+from owly_ai import LLM
+from owly_ai.core.types import LLMRequest, Message
 
 async def main():
     llm = LLM(provider="openai", model="gpt-4o-mini")
@@ -98,8 +110,8 @@ asyncio.run(main())
 No async boilerplate required:
 
 ```python
-from owly import LLM
-from owly.core.types import LLMRequest, Message
+from owly_ai import LLM
+from owly_ai.core.types import LLMRequest, Message
 
 llm = LLM(provider="gemini", model="gemini-1.5-flash")
 msg = llm.generate_sync(LLMRequest(
@@ -116,7 +128,7 @@ print(msg.content)
 
 ```python
 import asyncio
-from owly import LLM, Agent, Tool
+from owly_ai import LLM, Agent, Tool
 
 def get_weather(location: str) -> str:
     """Get the current weather for a location."""
@@ -160,10 +172,10 @@ print(answer)
 
 ## 🛠 Defining Tools
 
-Use `Tool.from_function` to wrap any Python function. Owly uses `inspect` to auto-generate the JSON schema from type hints and docstrings:
+Use `Tool.from_function` to wrap any Python function. owly-ai uses `inspect` to auto-generate the JSON schema from type hints and docstrings:
 
 ```python
-from owly import Tool
+from owly_ai import Tool
 
 def search_web(query: str, max_results: int = 5) -> str:
     """Search the web and return results."""
@@ -191,8 +203,8 @@ agent = Agent(llm=llm, tools=[Tool.from_function(fetch_data)])
 `Agent` uses `InMemoryHistory` by default. Bring your own by implementing the `Memory` protocol:
 
 ```python
-from owly.memory import Memory
-from owly.core.types import Message
+from owly_ai.memory import Memory
+from owly_ai.core.types import Message
 
 class RedisMemory:
     def get_messages(self) -> tuple[Message, ...]:
@@ -231,8 +243,8 @@ Implement `BaseProvider` to plug in any LLM backend:
 
 ```python
 from collections.abc import AsyncGenerator
-from owly.core.interfaces import BaseProvider
-from owly.core.types import ProviderChunk, ProviderRequest
+from owly_ai.core.interfaces import BaseProvider
+from owly_ai.core.types import ProviderChunk, ProviderRequest
 
 class MyProvider(BaseProvider):
     async def stream(self, request: ProviderRequest) -> AsyncGenerator[ProviderChunk, None]:
@@ -249,7 +261,7 @@ llm = LLM(provider=MyProvider(), model="my-model")
 ## 📐 Architecture
 
 ```
-owly/
+owly_ai/
  ├── core/
  │    ├── types.py         # Data contracts (Message, Chunk, ToolDefinition, ...)
  │    ├── interfaces.py    # BaseProvider protocol
@@ -387,12 +399,12 @@ Contributions are welcome! Please follow these steps:
 1. **Fork** the repository at [github.com/amrawlabs/owly](https://github.com/amrawlabs/owly)
 2. **Create a branch** for your feature or fix: `git checkout -b feat/my-feature`
 3. **Write tests** for any new behavior in `tests/`
-4. **Keep it minimal** — Owly's core principle is zero unnecessary abstraction
+4. **Keep it minimal** — owly-ai's core principle is zero unnecessary abstraction
 5. **Open a pull request** with a clear description
 
 ### Adding a Provider
 
-Copy the structure of `owly/providers/openai.py`:
+Copy the structure of `owly_ai/providers/openai.py`:
 - Implement `async def stream(self, request: ProviderRequest) -> AsyncGenerator[ProviderChunk, None]`
 - Yield `ProviderChunk` with `text=` for text and `tool_call_id=`, `tool_name=`, `tool_arguments=` for tool calls
 - Register it in `LLM._resolve_provider()`
