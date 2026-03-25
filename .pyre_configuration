@@ -1,0 +1,12 @@
+{
+  "site_package_search_functions": true,
+  "source_directories": [
+    "owly"
+  ],
+  "exclude": [
+    ".*/\\.venv/.*",
+    ".*/tests/.*",
+    ".*/examples/.*"
+  ],
+  "python_version": "3.11"
+}
