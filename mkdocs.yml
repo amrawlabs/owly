@@ -1,0 +1,57 @@
+site_name: owly-ai
+site_description: Streaming-first LLM runtime for real-time systems
+site_url: https://amrawlabs.github.io/owly
+repo_url: https://github.com/amrawlabs/owly
+repo_name: amrawlabs/owly
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.instant
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: teal
+      accent: cyan
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: false
+            docstring_style: google
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Guides:
+      - Providers: guides/providers.md
+      - Cancellation & Timeouts: guides/cancellation-and-timeouts.md
+      - Agent & Tools: guides/agent-and-tools.md
+      - Examples: guides/examples.md
+  - Reference:
+      - LLM API: reference/llm.md
+      - Agent API: reference/agent.md
+      - Core Types: reference/core-types.md
+      - Config: reference/config.md
+  - Architecture:
+      - Stream Pipeline: architecture/pipeline.md
+  - Contributing:
+      - Development: contributing/development.md
+      - Release Process: contributing/release-process.md
