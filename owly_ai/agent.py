@@ -6,6 +6,7 @@ tool execution, and conversation memory.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
 from collections.abc import AsyncIterator
@@ -124,11 +125,16 @@ class Agent:
                     tool = self._tool_map[tool_name]
                     try:
                         kwargs = json.loads(raw_args) if raw_args else {}
-                        # Support both sync and async tool functions
+                        # Support both sync and async tool functions.
+                        # Sync tools are dispatched via run_in_executor so they never
+                        # block the event loop (C5 fix).
                         if inspect.iscoroutinefunction(tool.func):
                             result = await tool.func(**kwargs)
                         else:
-                            result = tool.func(**kwargs)
+                            loop = asyncio.get_event_loop()
+                            result = await loop.run_in_executor(
+                                None, lambda: tool.func(**kwargs)
+                            )
                         result_str = str(result)
                     except (ValueError, TypeError, KeyError, RuntimeError) as e:
                         result_str = f"Tool error: {type(e).__name__}: {e}"
@@ -187,8 +193,10 @@ class Agent:
             loop = None
 
         if loop and loop.is_running():
-            # Already inside an async context — run in a separate thread to avoid deadlock
+            # Already inside an async context — run in a separate thread to avoid deadlock.
+            # The lambda defers coroutine creation to the worker thread to avoid passing
+            # a coroutine object across event loop boundaries (undefined behaviour).
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(asyncio.run, self.run(prompt)).result()
+                return pool.submit(lambda: asyncio.run(self.run(prompt))).result()
 
         return asyncio.run(self.run(prompt))

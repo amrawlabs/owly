@@ -15,7 +15,10 @@ T = TypeVar("T")
 async def cancellable_stream(stream: AsyncIterator[T]) -> AsyncIterator[T]:
     """Wrap a stream and convert task cancellation into ``CancellationError``.
 
-    On cancellation this closes upstream immediately to prevent token leakage.
+    On cancellation this closes upstream **once** and guarantees no further yields.
+    The ``aclose`` is issued only in the ``CancelledError`` handler to avoid
+    double-closing the generator (which can raise ``RuntimeError`` on some
+    async generators).
     """
 
     try:
@@ -24,5 +27,3 @@ async def cancellable_stream(stream: AsyncIterator[T]) -> AsyncIterator[T]:
     except asyncio.CancelledError as exc:
         await aclose_safely(stream)
         raise CancellationError("Stream cancelled") from exc
-    finally:
-        await aclose_safely(stream)

@@ -6,88 +6,94 @@ and generating completions from various providers.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
 from .core.exceptions import ConfigurationError, ProviderError
 from .core.interfaces import BaseProvider
-from .core.types import Chunk, LLMRequest, Message, ProviderRequest, ToolCallChunk
+from .core.types import Chunk, LLMRequest, Message, ProviderRequest, RuntimeHints, ToolCallChunk
 from .infra.config import OwlyConfig
 from .runtime.stream_pipeline import run_stream_pipeline
 
 
 class LLM:
-    """Streaming-first LLM runtime client.
-    
-    This class handles provider resolution, request normalization, and 
-    orchestrates the streaming pipeline.
-    """
+    """Streaming-first LLM runtime client."""
 
     def __init__(
         self,
         provider: str | BaseProvider,
         model: str,
-        config: OwlyConfig | None = None,
         api_key: str | None = None,
+        project_id: str | None = None,
+        region: str | None = None,
+        credentials: Any | None = None,
+        config: OwlyConfig | None = None,
     ) -> None:
-        """Initialize the LLM client.
-        
+        """Initialize the LLM.
+
         Args:
-            provider: Either a provider name string (e.g., "openai", "gemini")
-                     or an instance of a class implementing BaseProvider.
-            model: The name of the model to use (e.g., "gpt-4o", "gemini-1.5-flash").
-            config: Optional runtime configuration for streaming.
-            api_key: Optional API key for the provider. If not provided, the 
-                    provider adapter will attempt to use environment variables.
-            
-        Raises:
-            ConfigurationError: If provider type is invalid.
+            provider: Provider name (e.g. "openai", "gemini", "vertex").
+            model: Model name.
+            api_key: Optional API key.
+            project_id: Optional GCP project ID (for Vertex).
+            region: Optional GCP region (for Vertex).
+            credentials: Optional authentication object (for Vertex).
+            config: Optional global runtime configuration.
         """
+        self.config = config or OwlyConfig()
+        self.model = model
+        self._project_id = project_id
+        self._region = region
+        self._credentials = credentials
+        self._stream_semaphore = asyncio.Semaphore(self.config.max_concurrency)
+
         if isinstance(provider, str):
-            self.provider = self._resolve_provider(provider, api_key)
+            self.provider = self._resolve_provider(
+                provider, api_key, project_id, region, credentials
+            )
         elif isinstance(provider, BaseProvider):
             self.provider = provider
         else:
             raise ConfigurationError("provider must be a provider name or BaseProvider")
-        self.model = model
-        self.config = config or OwlyConfig()
 
     @staticmethod
-    def _resolve_provider(provider: str, api_key: str | None = None) -> BaseProvider:
-        """Internal helper to instantiate provider adapters by name.
-        
-        Args:
-            provider: The name of the provider.
-            api_key: Optional API key to pass to the provider constructor.
-            
-        Returns:
-            An instance of the resolved BaseProvider.
-            
-        Raises:
-            ProviderError: If the provider name is unknown.
-        """
+    def _resolve_provider(
+        provider: str,
+        api_key: str | None = None,
+        project_id: str | None = None,
+        region: str | None = None,
+        credentials: Any | None = None,
+    ) -> BaseProvider:
         key = provider.strip().lower()
         if key == "openai":
             from .providers.openai import OpenAIProvider
-
             return OpenAIProvider(api_key=api_key)
         if key == "gemini":
             from .providers.gemini import GeminiProvider
-
             return GeminiProvider(api_key=api_key)
+        if key == "vertex":
+            from .providers.vertex import VertexProvider
+            return VertexProvider(project_id=project_id, region=region, credentials=credentials)
+        if key == "claude":
+            from .providers.claude import ClaudeProvider
+            return ClaudeProvider(api_key=api_key)
         raise ProviderError(f"Unknown provider '{provider}'")
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[Chunk | ToolCallChunk]:
-        """Stream normalized chunks from the configured provider.
+        # Build typed RuntimeHints from config — never touch LLMRequest.metadata
+        hints_kwargs: dict[str, Any] = {
+            "request_timeout": self.config.request_timeout,
+            "first_token_timeout": self.config.first_token_timeout,
+            "queue_maxsize": self.config.queue_maxsize,
+            "project_id": self._project_id,
+            "region": self._region,
+            "credentials": self._credentials,
+        }
+        if request.request_id:
+            hints_kwargs["request_id"] = request.request_id
 
-        Pipeline: provider -> cancellable -> normalized -> user.
-        
-        Args:
-            request: The LLMRequest containing messages and parameters.
-            
-        Yields:
-            Chunk or ToolCallChunk objects as they arrive from the provider.
-        """
+        hints = RuntimeHints(**hints_kwargs)
 
         provider_request = ProviderRequest(
             model=self.model,
@@ -95,23 +101,19 @@ class LLM:
             temperature=request.temperature,
             max_tokens=request.max_tokens,
             tools=request.tools,
-            metadata=request.metadata,
+            metadata=request.metadata,  # forwarded verbatim; Owly does not write here
+            hints=hints,
+            request_id=request.request_id,
         )
-        async for chunk in run_stream_pipeline(self.provider, provider_request, self.config):
+        async for chunk in run_stream_pipeline(
+            self.provider,
+            provider_request,
+            self.config,
+            semaphore=self._stream_semaphore,
+        ):
             yield chunk
 
     async def generate(self, request: LLMRequest) -> Message:
-        """Generate a complete message completion by buffering the stream.
-        
-        This method is a helper for non-streaming use cases. It aggregates all
-        text and tool call chunks into a single Message object.
-        
-        Args:
-            request: The LLMRequest to execute.
-            
-        Returns:
-            A Message object with the assistant role and accumulated content/tool_calls.
-        """
         content = ""
         tool_calls: dict[str, dict[str, str]] = {}
         async for chunk in self.stream(request):
@@ -121,37 +123,28 @@ class LLM:
                 tool_calls[chunk.tool_call_id]["arguments"] += chunk.arguments
             elif chunk.text:
                 content += chunk.text
-                
+
         tool_payloads = []
         if tool_calls:
             for call_id, call_data in tool_calls.items():
-                tool_payloads.append({
-                    "id": call_id,
-                    "type": "function",
-                    "function": {
-                        "name": call_data["name"],
-                        "arguments": call_data["arguments"],
+                tool_payloads.append(
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {
+                            "name": call_data["name"],
+                            "arguments": call_data["arguments"],
+                        },
                     }
-                })
-                
+                )
+
         return Message(
-            role="assistant", 
-            content=content if content else None, 
-            tool_calls=tool_payloads if tool_payloads else None
+            role="assistant",
+            content=content if content else None,
+            tool_calls=tool_payloads if tool_payloads else None,
         )
 
     def generate_sync(self, request: LLMRequest) -> Message:
-        """Synchronous wrapper around generate().
-        
-        Safe to call from any context including inside running event loops.
-        
-        Args:
-            request: The LLMRequest to execute.
-            
-        Returns:
-            A Message object representing the completion.
-        """
-        import asyncio
         import concurrent.futures
 
         try:
@@ -161,6 +154,6 @@ class LLM:
 
         if loop and loop.is_running():
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(asyncio.run, self.generate(request)).result()
+                return pool.submit(lambda: asyncio.run(self.generate(request))).result()
 
         return asyncio.run(self.generate(request))

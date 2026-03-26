@@ -1,6 +1,12 @@
 """Core contracts and primitives for Owly."""
 
-from .exceptions import CancellationError, ConfigurationError, OwlyError, ProviderError
+from .exceptions import (
+    CancellationError,
+    ConfigurationError,
+    OwlyError,
+    ProviderError,
+    ProviderTimeoutError,
+)
 from .interfaces import BaseProvider
 from .types import Chunk, LLMRequest, Message, ProviderChunk, ProviderRequest
 
@@ -15,4 +21,5 @@ __all__ = [
     "ConfigurationError",
     "OwlyError",
     "ProviderError",
+    "ProviderTimeoutError",
 ]

@@ -19,4 +19,8 @@ class OwlyConfig:
     """Top-level runtime configuration."""
 
     stream: StreamConfig = StreamConfig()
+    request_timeout: float = 30.0
+    first_token_timeout: float = 15.0
+    max_concurrency: int = 256
+    queue_maxsize: int = 256
     logger_name: str = "owly-ai"

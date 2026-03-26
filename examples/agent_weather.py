@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 
@@ -28,12 +29,30 @@ async def main() -> None:
         if "GEMINI_API_KEY" not in os.environ:
             print("Please set GEMINI_API_KEY.")
             return
-        model = "gemini-1.5-flash"
+        model = "gemini-2.5-flash-lite"
+    elif provider == "vertex":
+        if "GOOGLE_CLOUD_PROJECT" not in os.environ:
+            print("Please set GOOGLE_CLOUD_PROJECT.")
+            return
+        model = os.environ.get("MODEL", "gemini-2.5-flash")
     else:
         print(f"Unknown provider: {provider}")
         return
 
-    llm = LLM(provider=provider, model=model)
+    # Optional: Load credentials from a JSON file path if provided
+    credentials = None
+    creds_path = os.environ.get("CREDENTIALS_PATH")
+    if creds_path and os.path.exists(creds_path):
+        with open(creds_path) as f:
+            credentials = json.load(f)
+
+    llm = LLM(
+        provider=provider,
+        model=model,
+        project_id=os.environ.get("GOOGLE_CLOUD_PROJECT"),
+        region=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        credentials=credentials,
+    )
     weather_tool = Tool.from_function(get_weather)
     
     agent = Agent(

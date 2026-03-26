@@ -1,4 +1,4 @@
-"""Gemini provider adapter — uses google.genai (native async)."""
+"""Vertex AI Gemini provider adapter — uses google.genai (native async)."""
 
 from __future__ import annotations
 
@@ -20,30 +20,75 @@ except Exception:  # pragma: no cover - import boundary
     genai = None  # type: ignore[assignment]
 
 
-class GeminiProvider(BaseProvider):
-    """Gemini adapter using the native async google.genai SDK.
+class VertexProvider(BaseProvider):
+    """Vertex AI Gemini adapter using the native async google.genai SDK.
 
     Uses ``client.aio.models.generate_content_stream`` for fully async,
     non-blocking streaming — no thread pool, no queue, no stop_event required.
     """
 
-    def __init__(self, api_key: str | None = None) -> None:
-        """Initialize the Gemini provider.
+    def __init__(
+        self,
+        project_id: str | None = None,
+        region: str | None = None,
+        credentials: Any | None = None,
+        # Kept for backward compatibility and test injection only
+        _client_factory: Any | None = None,
+    ) -> None:
+        """Initialize the Vertex provider.
 
         Args:
-            api_key: Optional API key. Reads ``GOOGLE_API_KEY`` env var if not provided.
+            project_id: GCP project ID. Reads ``GOOGLE_CLOUD_PROJECT`` env var if absent.
+            region: GCP region (e.g. ``us-central1``). Reads ``GOOGLE_CLOUD_LOCATION`` if absent.
+            credentials: Optional authentication object (service account dict or oauth2 credentials).
+            _client_factory: Optional callable returning a mock client for testing.
         """
-        if genai is None:
+        if genai is None and _client_factory is None:
             raise ProviderError(
-                "google-genai SDK is required for GeminiProvider. "
+                "google-genai SDK is required for VertexProvider. "
                 "Install with: pip install google-genai"
             )
-        import os
-        api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        self._client = genai.Client(api_key=api_key) if api_key else genai.Client()
+        self._project_id = project_id
+        self._region = region
+        self._credentials = credentials
+        self._client_factory = _client_factory
+
+    def _get_client(
+        self,
+        project_id: str | None,
+        region: str | None,
+        credentials: Any | None = None,
+    ) -> Any:
+        if self._client_factory is not None:
+            return self._client_factory(
+                project_id=project_id, region=region, credentials=credentials
+            )
+
+        auth_obj = credentials or self._credentials
+        # If we received a raw dict (e.g. from json.load), convert to a credentials object.
+        if isinstance(auth_obj, dict):
+            try:
+                from google.oauth2 import service_account
+                # Vertex AI requires at least the cloud-platform scope.
+                scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+                auth_obj = service_account.Credentials.from_service_account_info(
+                    auth_obj, scopes=scopes
+                )
+            except ImportError:
+                raise ProviderError(
+                    "google-auth is required to use dictionary credentials. "
+                    "Install with: pip install google-auth"
+                )
+
+        return genai.Client(  # type: ignore[union-attr]
+            vertexai=True,
+            project=project_id,
+            location=region,
+            credentials=auth_obj,
+        )
 
     async def stream(self, request: ProviderRequest) -> AsyncGenerator[ProviderChunk, None]:
-        """Execute and stream a Gemini request via the native async SDK."""
+        """Execute and stream a Vertex AI request via the native async SDK."""
         logger = get_logger()
         started = perf_counter()
 
@@ -51,6 +96,16 @@ class GeminiProvider(BaseProvider):
         request_timeout = request.hints.request_timeout
         first_token_timeout = request.hints.first_token_timeout
         raw_stream: Any | None = None
+
+        # Per-request project/region/credentials override via hints
+        project_id = request.hints.project_id or self._project_id
+        region = request.hints.region or self._region
+        credentials = request.hints.credentials or self._credentials
+
+        try:
+            client = self._get_client(project_id, region, credentials)
+        except Exception as exc:
+            raise ProviderError(f"Vertex client setup failed: {exc}") from exc
 
         tools_config = None
         if request.tools:
@@ -81,7 +136,7 @@ class GeminiProvider(BaseProvider):
 
         try:
             raw_stream = await asyncio.wait_for(
-                self._client.aio.models.generate_content_stream(
+                client.aio.models.generate_content_stream(
                     model=request.model,
                     contents=contents,
                     config=config,
@@ -109,7 +164,7 @@ class GeminiProvider(BaseProvider):
             if raw_stream is not None:
                 await _aclose_stream(raw_stream)
             logger.exception(
-                "provider_timeout provider=gemini model=%s request_id=%s latency_ms=%.2f",
+                "provider_timeout provider=vertex model=%s request_id=%s latency_ms=%.2f",
                 request.model,
                 request.hints.request_id,
                 (perf_counter() - started) * 1000.0,
@@ -119,15 +174,15 @@ class GeminiProvider(BaseProvider):
             if raw_stream is not None:
                 await _aclose_stream(raw_stream)
             logger.exception(
-                "provider_error provider=gemini model=%s request_id=%s latency_ms=%.2f",
+                "provider_error provider=vertex model=%s request_id=%s latency_ms=%.2f",
                 request.model,
                 request.hints.request_id,
                 (perf_counter() - started) * 1000.0,
             )
-            raise ProviderError(f"Gemini streaming failed: {exc}") from exc
+            raise ProviderError(f"Vertex streaming failed: {exc}") from exc
         else:
             logger.info(
-                "provider_complete provider=gemini model=%s request_id=%s latency_ms=%.2f",
+                "provider_complete provider=vertex model=%s request_id=%s latency_ms=%.2f",
                 request.model,
                 request.hints.request_id,
                 (perf_counter() - started) * 1000.0,
@@ -156,20 +211,14 @@ async def _iter_with_timeouts(
         except (TimeoutError, asyncio.TimeoutError) as exc:
             stage = "first token" if not received_first else "stream iteration"
             raise ProviderTimeoutError(
-                f"Gemini {stage} timed out after {timeout:.2f}s"
+                f"Vertex {stage} timed out after {timeout:.2f}s"
             ) from exc
         received_first = True
         yield event
 
 
 def _to_contents(request: ProviderRequest) -> tuple[str, list[dict[str, Any]]]:
-    """D5: Convert structured messages to Gemini contents list + system_instruction.
-
-    Returns:
-        Tuple of (system_instruction, contents) where:
-        - system_instruction: concatenated text of all system messages
-        - contents: structured turn list accepted by the Gemini API
-    """
+    """D5: Convert structured messages to Gemini contents list + system_instruction."""
     system_parts: list[str] = []
     contents: list[dict[str, Any]] = []
 
@@ -179,7 +228,6 @@ def _to_contents(request: ProviderRequest) -> tuple[str, list[dict[str, Any]]]:
                 system_parts.append(msg.content)
             continue
 
-        # Gemini uses "model" for assistant turns, "user" for everything else
         role = "model" if msg.role == "assistant" else "user"
         parts: list[dict[str, Any]] = []
 

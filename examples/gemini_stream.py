@@ -1,15 +1,20 @@
-"""Real-time Gemini streaming example for Owly."""
+"""Stream text from Gemini (AI Studio) using owly_ai."""
 
 from __future__ import annotations
 
 import asyncio
+import os
 
 from owly_ai import LLM
 from owly_ai.core.types import LLMRequest, Message
 
 
 async def main() -> None:
-    llm = LLM(provider="gemini", model="gemini-1.5-flash")
+    if "GEMINI_API_KEY" not in os.environ:
+        print("Please set GEMINI_API_KEY")
+        return
+
+    llm = LLM(provider="gemini", model=os.environ.get("MODEL", "gemini-2.5-flash"))
     request = LLMRequest(
         messages=[
             Message(
@@ -21,8 +26,8 @@ async def main() -> None:
     )
 
     async for chunk in llm.stream(request):
-        # Flush each piece immediately to preserve real-time feel.
-        print(chunk.text, end="", flush=True)
+        if hasattr(chunk, "text") and chunk.text:
+            print(chunk.text, end="", flush=True)
 
     print()
 

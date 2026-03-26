@@ -1,4 +1,4 @@
-"""Stream text from OpenAI using owly_ai."""
+"""Stream text from Anthropic Claude using owly_ai."""
 
 from __future__ import annotations
 
@@ -10,16 +10,16 @@ from owly_ai.core.types import LLMRequest, Message
 
 
 async def main() -> None:
-    if "OPENAI_API_KEY" not in os.environ:
-        print("Please set OPENAI_API_KEY")
+    if "ANTHROPIC_API_KEY" not in os.environ:
+        print("Please set ANTHROPIC_API_KEY")
         return
 
-    llm = LLM(provider="openai", model=os.environ.get("MODEL", "gpt-4o-mini"))
+    llm = LLM(provider="claude", model=os.environ.get("MODEL", "claude-3-5-sonnet-latest"))
     request = LLMRequest(
         messages=[
             Message(
                 role="user",
-                content="In one short paragraph, explain why streaming matters for voice assistants.",
+                content="In one short paragraph, explain why low-latency streaming matters in chat UIs.",
             )
         ],
         temperature=0.2,

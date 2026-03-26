@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
 
 from .types import ProviderChunk, ProviderRequest
 
@@ -12,5 +12,5 @@ class BaseProvider(ABC):
     """Contract for provider adapters used by Owly runtime."""
 
     @abstractmethod
-    async def stream(self, request: ProviderRequest) -> AsyncGenerator[ProviderChunk, None]:
+    async def stream(self, request: ProviderRequest) -> AsyncIterator[ProviderChunk]:
         """Yield provider chunks with minimal latency and no buffering."""

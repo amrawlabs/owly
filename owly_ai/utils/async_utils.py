@@ -33,8 +33,6 @@ def split_text_realtime(text: str, target_chars: int, max_chars: int) -> Iterato
         if piece:
             yield piece
         remaining = remaining[split_at:]
-        if remaining.startswith(" "):
-            remaining = remaining[1:]
 
     if remaining:
         yield remaining
